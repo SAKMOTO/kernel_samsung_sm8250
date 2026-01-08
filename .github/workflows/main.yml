@@ -1,9 +1,9 @@
 name: Build OneUI Kernel - S20 FE (r8q)
 
 on:
-  workflow_dispatch: # Allows manual trigger from GitHub Actions tab
+  workflow_dispatch:
   push:
-    branches: [ "master" ] # Trigger on push to master
+    branches: [ "master" ]
 
 jobs:
   build-kernel:
@@ -17,31 +17,36 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y bc build-essential zip gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi libssl-dev libncurses5-dev binutils-aarch64-linux-gnu python3
 
-      - name: Pull Reliable Toolchains
+      - name: Pull Toolchains
         run: |
           mkdir toolchain
           cd toolchain
-          # Clang 14 from a stable mirror (Prevents 400 Bad Request error)
+          # High-speed Clang 14 mirror
           git clone --depth=1 https://github.com/ZyCromerZ/Clang.git -b 14 clang
-          # GCC 4.9 for cross-compiling
+          # Standard AOSP GCC for compatibility
           git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 -b master gcc64
           git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9 -b master gcc32
 
       - name: Build Kernel
         run: |
-          # Set Paths
+          # Setup Paths
           export PATH=$(pwd)/toolchain/clang/bin:$(pwd)/toolchain/gcc64/bin:$(pwd)/toolchain/gcc32/bin:$PATH
           
-          # Build Variables
+          # Build Environment
           export ARCH=arm64
           export SUBARCH=arm64
           export KBUILD_COMPILER_STRING="Clang 14.0 (AOSP)"
+          export OUT_DIR=out
           
-          # 1. Setup Config for OneUI S20 FE
-          make O=out vendor/r8q_defconfig
+          # 1. Load Base Snapdragon Config
+          make O=$OUT_DIR defconfig
           
-          # 2. Compile
-          make -j$(nproc --all) O=out \
+          # 2. Merge Samsung r8q config (Correct Path)
+          # We use KCONFIG_CONFIG to ensure the merge writes to the right place
+          scripts/kconfig/merge_config.sh -O $OUT_DIR $OUT_DIR/.config arch/arm64/configs/vendor/samsung/r8q.config
+          
+          # 3. Compile
+          make -j$(nproc --all) O=$OUT_DIR \
                       CC=clang \
                       CROSS_COMPILE=aarch64-linux-android- \
                       CROSS_COMPILE_ARM32=arm-linux-androideabi- \
@@ -49,17 +54,22 @@ jobs:
                       LLVM=1 \
                       LD=ld.lld
 
-      - name: Package with AnyKernel3 (Flashable Zip)
+      - name: Package AnyKernel3
         run: |
           git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git AnyKernel3
-          cp out/arch/arm64/boot/Image.gz-dtb AnyKernel3/ || cp out/arch/arm64/boot/Image.gz AnyKernel3/
+          # Find the built image (usually Image.gz-dtb or Image.gz)
+          if [ -f out/arch/arm64/boot/Image.gz-dtb ]; then
+            cp out/arch/arm64/boot/Image.gz-dtb AnyKernel3/
+          else
+            cp out/arch/arm64/boot/Image.gz AnyKernel3/
+          fi
+          
           cd AnyKernel3
-          # Simple script to update AnyKernel3 config for S20 FE
           sed -i 's/device.name1=maguro/device.name1=r8q/g' anykernel.sh
-          zip -r ../S20FE_Kernel_Build.zip *
+          zip -r ../S20FE_r8q_Kernel.zip *
 
-      - name: Upload Flashable Kernel
+      - name: Upload Kernel
         uses: actions/upload-artifact@v4
         with:
-          name: OneUI-S20FE-r8q-Kernel
-          path: S20FE_Kernel_Build.zip
+          name: S20FE-r8q-Kernel-OneUI
+          path: S20FE_r8q_Kernel.zip
