@@ -21,66 +21,70 @@ jobs:
         run: |
           mkdir toolchain
           cd toolchain
-          # Clang 14 contains the ld.lld we need
-          git clone --depth=1 https://github.com/ZyCromerZ/Clang.git -b 14 clang
+          # Using a more standard AOSP Clang mirror that doesn't have nested folders
+          git clone --depth=1 https://github.com/n00b-m4st3r/patch-arm64-clang -b master clang
           git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 -b master gcc64
           git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9 -b master gcc32
 
       - name: Build Kernel
         run: |
-          # 1. Define Absolute Paths
+          # 1. Setup absolute paths and permissions
           TOOLCHAIN_DIR=$(pwd)/toolchain
-          CLANG_BIN=$TOOLCHAIN_DIR/clang/bin
-          GCC64_BIN=$TOOLCHAIN_DIR/gcc64/bin
-          GCC32_BIN=$TOOLCHAIN_DIR/gcc32/bin
+          chmod +x $TOOLCHAIN_DIR/clang/bin/*
           
-          # 2. Add to PATH
-          export PATH=$CLANG_BIN:$GCC64_BIN:$GCC32_BIN:$PATH
-          
-          # 3. Define the Linker explicitly to avoid "not found" error
-          # This is the secret fix: passing the full path to the LD variable
-          LD_PATH=$CLANG_BIN/ld.lld
-          
+          # 2. Setup Environment
+          export PATH=$TOOLCHAIN_DIR/clang/bin:$TOOLCHAIN_DIR/gcc64/bin:$TOOLCHAIN_DIR/gcc32/bin:$PATH
           export ARCH=arm64
           export SUBARCH=arm64
           export OUT_DIR=out
           
-          # 4. Generate Base Config
-          # We pass LD here too so the config check doesn't fail
-          make O=$OUT_DIR ARCH=arm64 LD=$LD_PATH defconfig
+          # 3. Use standard LLVM variable instead of forcing LD path
+          # This allows the Makefile to find ld.lld in the PATH automatically
           
-          # 5. Merge Samsung Config
+          # Generate Base Config
+          make O=$OUT_DIR ARCH=arm64 CC=clang CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android- defconfig
+          
+          # Merge Samsung Config
           scripts/kconfig/merge_config.sh -O $OUT_DIR $OUT_DIR/.config arch/arm64/configs/vendor/samsung/r8q.config
           
-          # 6. Final Compile
-          # Passing LLVM=1 and LLVM_IAS=1 plus the explicit LD path
+          # 4. Final Compile
+          # We use LLVM=1 which is the most compatible way for SM8250
           make -j$(nproc --all) O=$OUT_DIR \
                       ARCH=arm64 \
-                      LLVM=1 \
-                      LLVM_IAS=1 \
-                      LD=$LD_PATH \
+                      CC=clang \
+                      LD=ld.lld \
+                      AR=llvm-ar \
+                      NM=llvm-nm \
+                      OBJCOPY=llvm-objcopy \
+                      OBJDUMP=llvm-objdump \
+                      STRIP=llvm-strip \
+                      CLANG_TRIPLE=aarch64-linux-gnu- \
                       CROSS_COMPILE=aarch64-linux-android- \
                       CROSS_COMPILE_ARM32=arm-linux-androideabi- \
-                      CLANG_TRIPLE=aarch64-linux-gnu-
+                      LLVM=1 \
+                      LLVM_IAS=1
 
       - name: Package AnyKernel3
         run: |
           git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git AnyKernel3
-          # Find the built image
+          # Copy images
           if [ -f out/arch/arm64/boot/Image.gz-dtb ]; then
             cp out/arch/arm64/boot/Image.gz-dtb AnyKernel3/
           elif [ -f out/arch/arm64/boot/Image.gz ]; then
             cp out/arch/arm64/boot/Image.gz AnyKernel3/
-          else
-            cp out/arch/arm64/boot/Image AnyKernel3/
+          fi
+          
+          # Include dtbo if it exists (Recommended for S20 FE)
+          if [ -f out/arch/arm64/boot/dtbo.img ]; then
+            cp out/arch/arm64/boot/dtbo.img AnyKernel3/
           fi
           
           cd AnyKernel3
           sed -i 's/device.name1=maguro/device.name1=r8q/g' anykernel.sh
-          zip -r ../S20FE_r8q_OneUI_Kernel.zip *
+          zip -r ../S20FE_r8q_Kernel.zip *
 
       - name: Upload Kernel
         uses: actions/upload-artifact@v4
         with:
-          name: S20FE-r8q-Kernel
-          path: S20FE_r8q_OneUI_Kernel.zip
+          name: S20FE-r8q-Kernel-OneUI
+          path: S20FE_r8q_Kernel.zip
