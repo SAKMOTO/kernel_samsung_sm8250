@@ -15,7 +15,6 @@ jobs:
       SUBARCH: arm64
       OUTDIR: out
       DEFCONFIG: defconfig
-      # Path to your Samsung specific config
       SAMSUNG_CONFIG: arch/arm64/configs/vendor/samsung/r8q.config
 
     steps:
@@ -30,25 +29,27 @@ jobs:
         sudo apt update
         sudo apt install -y bc bison build-essential curl flex git libelf-dev libssl-dev libncurses-dev python3 zip
 
-    - name: 📥 Download AOSP Clang & GCC
+    - name: 📥 Download Proton Clang & AOSP GCC
       run: |
         mkdir toolchain
         cd toolchain
-        # Download Proton Clang - Stable, fast, and includes all necessary linkers (ld.lld)
+        # Proton Clang is reliable and includes all LLVM tools
         curl -LO https://github.com/kdrag0n/proton-clang/archive/refs/heads/master.tar.gz
         mkdir clang && tar -xf master.tar.gz -C clang --strip-components=1
-        # Use AOSP GCC for cross-compilation
+        # GCC is needed for certain kernel headers/objects
         git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 -b master gcc64
         git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9 -b master gcc32
 
     - name: ⚙️ Load & Merge Defconfig
       run: |
-        export PATH=$(pwd)/toolchain/clang/bin:$PATH
-        # 1. Create out directory
+        # DO NOT export PATH globally here to avoid breaking host tools
+        export CLANG_BIN=$(pwd)/toolchain/clang/bin
         mkdir -p $OUTDIR
-        # 2. Base Config
-        make O=$OUTDIR ARCH=arm64 $DEFCONFIG
-        # 3. Merge Samsung r8q config
+        
+        # Base Config
+        make O=$OUTDIR ARCH=arm64 CC=$CLANG_BIN/clang $DEFCONFIG
+        
+        # Merge Samsung r8q config
         if [ -f $SAMSUNG_CONFIG ]; then
           scripts/kconfig/merge_config.sh -O $OUTDIR $OUTDIR/.config $SAMSUNG_CONFIG
         else
@@ -58,30 +59,34 @@ jobs:
 
     - name: 🔧 Disable problematic Samsung options
       run: |
-        # Use the scripts/config tool to modify the generated .config
         ./scripts/config --file $OUTDIR/.config --disable CONFIG_LD_IS_LLD
         ./scripts/config --file $OUTDIR/.config --disable CONFIG_LTO_CLANG
         ./scripts/config --file $OUTDIR/.config --disable CONFIG_CFI_CLANG
-        # Update config to apply changes
-        make O=$OUTDIR ARCH=arm64 olddefconfig
+        make O=$OUTDIR ARCH=arm64 CC=$(pwd)/toolchain/clang/bin/clang olddefconfig
 
     - name: 🔨 Build kernel
       run: |
-        export PATH=$(pwd)/toolchain/clang/bin:$(pwd)/toolchain/gcc64/bin:$(pwd)/toolchain/gcc32/bin:$PATH
+        # Set paths as variables
+        TC_DIR=$(pwd)/toolchain
+        CLANG_BIN=$TC_DIR/clang/bin
+        GCC64_BIN=$TC_DIR/gcc64/bin
+        GCC32_BIN=$TC_DIR/gcc32/bin
+        
+        # Build using explicit tool paths to prevent PATH pollution
         make -j$(nproc --all) O=$OUTDIR \
           ARCH=arm64 \
-          CC=clang \
-          LD=ld.lld \
-          AR=llvm-ar \
-          NM=llvm-nm \
-          OBJCOPY=llvm-objcopy \
-          OBJDUMP=llvm-objdump \
-          STRIP=llvm-strip \
+          CC=$CLANG_BIN/clang \
+          LD=$CLANG_BIN/ld.lld \
+          AR=$CLANG_BIN/llvm-ar \
+          NM=$CLANG_BIN/llvm-nm \
+          OBJCOPY=$CLANG_BIN/llvm-objcopy \
+          OBJDUMP=$CLANG_BIN/llvm-objdump \
+          STRIP=$CLANG_BIN/llvm-strip \
+          CROSS_COMPILE=$GCC64_BIN/aarch64-linux-android- \
+          CROSS_COMPILE_ARM32=$GCC32_BIN/arm-linux-androideabi- \
+          CLANG_TRIPLE=aarch64-linux-gnu- \
           LLVM=1 \
-          LLVM_IAS=1 \
-          CROSS_COMPILE=aarch64-linux-android- \
-          CROSS_COMPILE_ARM32=arm-linux-androideabi- \
-          CLANG_TRIPLE=aarch64-linux-gnu-
+          LLVM_IAS=1
 
     - name: ✅ Verify Image
       run: |
@@ -95,14 +100,13 @@ jobs:
       run: |
         git clone https://github.com/osm0sis/AnyKernel3 --depth=1
         cp $OUTDIR/arch/arm64/boot/${{ env.IMAGE_TYPE }} AnyKernel3/
-        # Copy DTBO if exists
         [ -f $OUTDIR/arch/arm64/boot/dtbo.img ] && cp $OUTDIR/arch/arm64/boot/dtbo.img AnyKernel3/
         cd AnyKernel3
         sed -i 's/device.name1=maguro/device.name1=r8q/g' anykernel.sh
-        zip -r9 ../BlazeX-S20FE-$(date +%Y%m%d-%H%M).zip *
+        zip -r9 ../BlazeX-S20FE-Kernel.zip *
 
     - name: ⬆️ Upload artifacts
       uses: actions/upload-artifact@v4
       with:
         name: BlazeX-Kernel-S20FE
-        path: BlazeX-S20FE-*.zip
+        path: BlazeX-S20FE-Kernel.zip
