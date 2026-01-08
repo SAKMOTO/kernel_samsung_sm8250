@@ -15,49 +15,52 @@ jobs:
       - name: Install Build Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc build-essential zip gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi libssl-dev libncurses5-dev binutils-aarch64-linux-gnu python3
+          sudo apt-get install -y bc build-essential zip gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi libssl-dev libncurses5-dev binutils-aarch64-linux-gnu python3 libssl-dev
 
       - name: Pull Toolchains
         run: |
           mkdir toolchain
           cd toolchain
-          # High-speed Clang 14 mirror
+          # We use Clang 14 which contains the built-in ld.lld linker
           git clone --depth=1 https://github.com/ZyCromerZ/Clang.git -b 14 clang
-          # Standard AOSP GCC for compatibility
           git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 -b master gcc64
           git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9 -b master gcc32
 
       - name: Build Kernel
         run: |
-          # Setup Paths
-          export PATH=$(pwd)/toolchain/clang/bin:$(pwd)/toolchain/gcc64/bin:$(pwd)/toolchain/gcc32/bin:$PATH
+          # 1. Setup absolute paths
+          CLANG_BIN=$(pwd)/toolchain/clang/bin
+          GCC64_BIN=$(pwd)/toolchain/gcc64/bin
+          GCC32_BIN=$(pwd)/toolchain/gcc32/bin
           
-          # Build Environment
+          # 2. Add them to PATH (Crucial for ld.lld to be found)
+          export PATH=$CLANG_BIN:$GCC64_BIN:$GCC32_BIN:$PATH
+          
+          # 3. Set Build Variables
           export ARCH=arm64
           export SUBARCH=arm64
-          export KBUILD_COMPILER_STRING="Clang 14.0 (AOSP)"
+          export KBUILD_COMPILER_STRING="Clang 14.0"
           export OUT_DIR=out
           
-          # 1. Load Base Snapdragon Config
+          # 4. Generate the Base Config
           make O=$OUT_DIR defconfig
           
-          # 2. Merge Samsung r8q config (Correct Path)
-          # We use KCONFIG_CONFIG to ensure the merge writes to the right place
+          # 5. Merge the Samsung r8q configuration
+          # This combines the generic SM8250 base with S20 FE specific drivers
           scripts/kconfig/merge_config.sh -O $OUT_DIR $OUT_DIR/.config arch/arm64/configs/vendor/samsung/r8q.config
           
-          # 3. Compile
+          # 6. Build the Kernel (LLVM=1 handles the CC/LD/OBJCOPY automatically)
           make -j$(nproc --all) O=$OUT_DIR \
-                      CC=clang \
+                      LLVM=1 \
+                      LLVM_IAS=1 \
                       CROSS_COMPILE=aarch64-linux-android- \
                       CROSS_COMPILE_ARM32=arm-linux-androideabi- \
-                      CLANG_TRIPLE=aarch64-linux-gnu- \
-                      LLVM=1 \
-                      LD=ld.lld
+                      CLANG_TRIPLE=aarch64-linux-gnu-
 
-      - name: Package AnyKernel3
+      - name: Package for S20 FE
         run: |
           git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git AnyKernel3
-          # Find the built image (usually Image.gz-dtb or Image.gz)
+          # Samsung kernels usually output Image.gz-dtb
           if [ -f out/arch/arm64/boot/Image.gz-dtb ]; then
             cp out/arch/arm64/boot/Image.gz-dtb AnyKernel3/
           else
@@ -65,11 +68,12 @@ jobs:
           fi
           
           cd AnyKernel3
+          # Identify device as r8q in the flash script
           sed -i 's/device.name1=maguro/device.name1=r8q/g' anykernel.sh
           zip -r ../S20FE_r8q_Kernel.zip *
 
-      - name: Upload Kernel
+      - name: Upload Flashable Kernel
         uses: actions/upload-artifact@v4
         with:
-          name: S20FE-r8q-Kernel-OneUI
+          name: S20FE-OneUI-Kernel
           path: S20FE_r8q_Kernel.zip
