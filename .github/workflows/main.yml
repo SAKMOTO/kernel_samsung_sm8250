@@ -1,0 +1,60 @@
+name: Build S20 FE (r8q) Kernel
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "master" ] # Verify if your branch is 'master' or 'lineage-21'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Kernel Source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Build Environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc build-essential zip gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi libssl-dev libncurses5-dev binutils-aarch64-linux-gnu python3
+
+      - name: Pull Toolchains
+        run: |
+          mkdir toolchain
+          cd toolchain
+          # AOSP Clang
+          wget https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/master/clang-r416183b1.tar.gz
+          mkdir clang && tar -xf clang-r416183b1.tar.gz -C clang
+          # AOSP GCC 4.9 (Required for Samsung SM8250)
+          git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 -b master gcc64
+          git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9 -b master gcc32
+
+      - name: Compile Kernel
+        run: |
+          # Add toolchains to PATH
+          export PATH=$(pwd)/toolchain/clang/bin:$(pwd)/toolchain/gcc64/bin:$(pwd)/toolchain/gcc32/bin:$PATH
+          
+          # Build Environment
+          export ARCH=arm64
+          export SUBARCH=arm64
+          export KBUILD_COMPILER_STRING="Clang 12.0"
+          
+          # Target S20 FE (r8q)
+          # Note: Changed defconfig to vendor/r8q_defconfig
+          make O=out vendor/r8q_defconfig
+          
+          # Start Compilation
+          make -j$(nproc --all) O=out \
+                      CC=clang \
+                      CROSS_COMPILE=aarch64-linux-android- \
+                      CROSS_COMPILE_ARM32=arm-linux-androideabi- \
+                      CLANG_TRIPLE=aarch64-linux-gnu-
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: S20FE-r8q-Kernel
+          path: |
+            out/arch/arm64/boot/Image.gz*
+            out/arch/arm64/boot/dtbo.img
