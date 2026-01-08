@@ -1,90 +1,108 @@
-name: Build OneUI Kernel - S20 FE (r8q)
+name: BlazeX Kernel Build
 
 on:
-  workflow_dispatch:
   push:
-    branches: [ "master" ]
+    branches: [ "master", "main" ]
+  workflow_dispatch:
 
 jobs:
-  build-kernel:
+  build:
     runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    env:
+      ARCH: arm64
+      SUBARCH: arm64
+      OUTDIR: out
+      DEFCONFIG: defconfig
+      # Path to your Samsung specific config
+      SAMSUNG_CONFIG: arch/arm64/configs/vendor/samsung/r8q.config
+
     steps:
-      - name: Checkout Source
-        uses: actions/checkout@v4
+    - name: 📥 Checkout source
+      uses: actions/checkout@v4
+      with:
+        submodules: true
+        fetch-depth: 1
 
-      - name: Install Build Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y bc build-essential zip gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi libssl-dev libncurses5-dev binutils-aarch64-linux-gnu python3 libssl-dev
+    - name: 🛠 Install build dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y bc bison build-essential curl flex git libelf-dev libssl-dev libncurses-dev python3 zip
 
-      - name: Pull Toolchains
-        run: |
-          mkdir toolchain
-          cd toolchain
-          # Using a more standard AOSP Clang mirror that doesn't have nested folders
-          git clone --depth=1 https://github.com/n00b-m4st3r/patch-arm64-clang -b master clang
-          git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 -b master gcc64
-          git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9 -b master gcc32
+    - name: 📥 Download AOSP Clang & GCC
+      run: |
+        mkdir toolchain
+        cd toolchain
+        # Download Proton Clang - Stable, fast, and includes all necessary linkers (ld.lld)
+        curl -LO https://github.com/kdrag0n/proton-clang/archive/refs/heads/master.tar.gz
+        mkdir clang && tar -xf master.tar.gz -C clang --strip-components=1
+        # Use AOSP GCC for cross-compilation
+        git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 -b master gcc64
+        git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9 -b master gcc32
 
-      - name: Build Kernel
-        run: |
-          # 1. Setup absolute paths and permissions
-          TOOLCHAIN_DIR=$(pwd)/toolchain
-          chmod +x $TOOLCHAIN_DIR/clang/bin/*
-          
-          # 2. Setup Environment
-          export PATH=$TOOLCHAIN_DIR/clang/bin:$TOOLCHAIN_DIR/gcc64/bin:$TOOLCHAIN_DIR/gcc32/bin:$PATH
-          export ARCH=arm64
-          export SUBARCH=arm64
-          export OUT_DIR=out
-          
-          # 3. Use standard LLVM variable instead of forcing LD path
-          # This allows the Makefile to find ld.lld in the PATH automatically
-          
-          # Generate Base Config
-          make O=$OUT_DIR ARCH=arm64 CC=clang CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android- defconfig
-          
-          # Merge Samsung Config
-          scripts/kconfig/merge_config.sh -O $OUT_DIR $OUT_DIR/.config arch/arm64/configs/vendor/samsung/r8q.config
-          
-          # 4. Final Compile
-          # We use LLVM=1 which is the most compatible way for SM8250
-          make -j$(nproc --all) O=$OUT_DIR \
-                      ARCH=arm64 \
-                      CC=clang \
-                      LD=ld.lld \
-                      AR=llvm-ar \
-                      NM=llvm-nm \
-                      OBJCOPY=llvm-objcopy \
-                      OBJDUMP=llvm-objdump \
-                      STRIP=llvm-strip \
-                      CLANG_TRIPLE=aarch64-linux-gnu- \
-                      CROSS_COMPILE=aarch64-linux-android- \
-                      CROSS_COMPILE_ARM32=arm-linux-androideabi- \
-                      LLVM=1 \
-                      LLVM_IAS=1
+    - name: ⚙️ Load & Merge Defconfig
+      run: |
+        export PATH=$(pwd)/toolchain/clang/bin:$PATH
+        # 1. Create out directory
+        mkdir -p $OUTDIR
+        # 2. Base Config
+        make O=$OUTDIR ARCH=arm64 $DEFCONFIG
+        # 3. Merge Samsung r8q config
+        if [ -f $SAMSUNG_CONFIG ]; then
+          scripts/kconfig/merge_config.sh -O $OUTDIR $OUTDIR/.config $SAMSUNG_CONFIG
+        else
+          echo "SAMSUNG_CONFIG not found at $SAMSUNG_CONFIG"
+          exit 1
+        fi
 
-      - name: Package AnyKernel3
-        run: |
-          git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git AnyKernel3
-          # Copy images
-          if [ -f out/arch/arm64/boot/Image.gz-dtb ]; then
-            cp out/arch/arm64/boot/Image.gz-dtb AnyKernel3/
-          elif [ -f out/arch/arm64/boot/Image.gz ]; then
-            cp out/arch/arm64/boot/Image.gz AnyKernel3/
-          fi
-          
-          # Include dtbo if it exists (Recommended for S20 FE)
-          if [ -f out/arch/arm64/boot/dtbo.img ]; then
-            cp out/arch/arm64/boot/dtbo.img AnyKernel3/
-          fi
-          
-          cd AnyKernel3
-          sed -i 's/device.name1=maguro/device.name1=r8q/g' anykernel.sh
-          zip -r ../S20FE_r8q_Kernel.zip *
+    - name: 🔧 Disable problematic Samsung options
+      run: |
+        # Use the scripts/config tool to modify the generated .config
+        ./scripts/config --file $OUTDIR/.config --disable CONFIG_LD_IS_LLD
+        ./scripts/config --file $OUTDIR/.config --disable CONFIG_LTO_CLANG
+        ./scripts/config --file $OUTDIR/.config --disable CONFIG_CFI_CLANG
+        # Update config to apply changes
+        make O=$OUTDIR ARCH=arm64 olddefconfig
 
-      - name: Upload Kernel
-        uses: actions/upload-artifact@v4
-        with:
-          name: S20FE-r8q-Kernel-OneUI
-          path: S20FE_r8q_Kernel.zip
+    - name: 🔨 Build kernel
+      run: |
+        export PATH=$(pwd)/toolchain/clang/bin:$(pwd)/toolchain/gcc64/bin:$(pwd)/toolchain/gcc32/bin:$PATH
+        make -j$(nproc --all) O=$OUTDIR \
+          ARCH=arm64 \
+          CC=clang \
+          LD=ld.lld \
+          AR=llvm-ar \
+          NM=llvm-nm \
+          OBJCOPY=llvm-objcopy \
+          OBJDUMP=llvm-objdump \
+          STRIP=llvm-strip \
+          LLVM=1 \
+          LLVM_IAS=1 \
+          CROSS_COMPILE=aarch64-linux-android- \
+          CROSS_COMPILE_ARM32=arm-linux-androideabi- \
+          CLANG_TRIPLE=aarch64-linux-gnu-
+
+    - name: ✅ Verify Image
+      run: |
+        if [ -f $OUTDIR/arch/arm64/boot/Image.gz-dtb ]; then
+            echo "IMAGE_TYPE=Image.gz-dtb" >> $GITHUB_ENV
+        else
+            echo "IMAGE_TYPE=Image.gz" >> $GITHUB_ENV
+        fi
+
+    - name: 📦 AnyKernel3 ZIP
+      run: |
+        git clone https://github.com/osm0sis/AnyKernel3 --depth=1
+        cp $OUTDIR/arch/arm64/boot/${{ env.IMAGE_TYPE }} AnyKernel3/
+        # Copy DTBO if exists
+        [ -f $OUTDIR/arch/arm64/boot/dtbo.img ] && cp $OUTDIR/arch/arm64/boot/dtbo.img AnyKernel3/
+        cd AnyKernel3
+        sed -i 's/device.name1=maguro/device.name1=r8q/g' anykernel.sh
+        zip -r9 ../BlazeX-S20FE-$(date +%Y%m%d-%H%M).zip *
+
+    - name: ⬆️ Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: BlazeX-Kernel-S20FE
+        path: BlazeX-S20FE-*.zip
