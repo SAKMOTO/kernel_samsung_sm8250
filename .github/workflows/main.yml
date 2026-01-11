@@ -2,12 +2,12 @@ name: BlazeX Kernel Build
 
 on:
   push:
-    branches: [ "master", "main" ]
+    branches: [ "main", "master" ]
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 120
 
     env:
@@ -24,88 +24,64 @@ jobs:
         submodules: true
         fetch-depth: 1
 
-    - name: 🛠 Install build dependencies
+    - name: 🛠 Install dependencies
       run: |
         sudo apt update
-        sudo apt install -y bc bison build-essential curl flex git libelf-dev libssl-dev libncurses-dev python3 zip
+        sudo apt install -y \
+          bc bison build-essential curl flex git \
+          libelf-dev libssl-dev libncurses-dev \
+          python3 zip rsync ccache
 
-    - name: 📥 Download Proton Clang & AOSP GCC
+    - name: 📥 Download AOSP Clang + GCC
       run: |
-        mkdir toolchain
-        cd toolchain
-        # Proton Clang is reliable and includes all LLVM tools
-        curl -LO https://github.com/kdrag0n/proton-clang/archive/refs/heads/master.tar.gz
-        mkdir clang && tar -xf master.tar.gz -C clang --strip-components=1
-        # GCC is needed for certain kernel headers/objects
-        git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 -b master gcc64
-        git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9 -b master gcc32
+        mkdir toolchain && cd toolchain
 
-    - name: ⚙️ Load & Merge Defconfig
+        # AOSP Clang (STABLE for Samsung)
+        curl -LO https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/master/clang-r450784.tar.gz
+        mkdir clang && tar -xf clang-r450784.tar.gz -C clang
+
+        # GCC
+        git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 gcc64
+        git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9 gcc32
+
+    - name: ⚙️ Configure kernel
       run: |
-        # DO NOT export PATH globally here to avoid breaking host tools
-        export CLANG_BIN=$(pwd)/toolchain/clang/bin
+        export PATH=$(pwd)/toolchain/clang/bin:$PATH
         mkdir -p $OUTDIR
-        
-        # Base Config
-        make O=$OUTDIR ARCH=arm64 CC=$CLANG_BIN/clang $DEFCONFIG
-        
-        # Merge Samsung r8q config
-        if [ -f $SAMSUNG_CONFIG ]; then
-          scripts/kconfig/merge_config.sh -O $OUTDIR $OUTDIR/.config $SAMSUNG_CONFIG
-        else
-          echo "SAMSUNG_CONFIG not found at $SAMSUNG_CONFIG"
-          exit 1
-        fi
 
-    - name: 🔧 Disable problematic Samsung options
-      run: |
-        ./scripts/config --file $OUTDIR/.config --disable CONFIG_LD_IS_LLD
-        ./scripts/config --file $OUTDIR/.config --disable CONFIG_LTO_CLANG
-        ./scripts/config --file $OUTDIR/.config --disable CONFIG_CFI_CLANG
-        make O=$OUTDIR ARCH=arm64 CC=$(pwd)/toolchain/clang/bin/clang olddefconfig
+        make O=$OUTDIR ARCH=arm64 $DEFCONFIG
+        scripts/kconfig/merge_config.sh -O $OUTDIR \
+          $OUTDIR/.config $SAMSUNG_CONFIG
 
-    - name: 🔨 Build kernel
+        make O=$OUTDIR ARCH=arm64 olddefconfig
+
+    - name: 🔨 Build kernel (SAFE MODE)
       run: |
-        # Set paths as variables
-        TC_DIR=$(pwd)/toolchain
-        CLANG_BIN=$TC_DIR/clang/bin
-        GCC64_BIN=$TC_DIR/gcc64/bin
-        GCC32_BIN=$TC_DIR/gcc32/bin
-        
-        # Build using explicit tool paths to prevent PATH pollution
-        make -j$(nproc --all) O=$OUTDIR \
+        make -j$(nproc) O=$OUTDIR \
           ARCH=arm64 \
-          CC=$CLANG_BIN/clang \
-          LD=$CLANG_BIN/ld.lld \
-          AR=$CLANG_BIN/llvm-ar \
-          NM=$CLANG_BIN/llvm-nm \
-          OBJCOPY=$CLANG_BIN/llvm-objcopy \
-          OBJDUMP=$CLANG_BIN/llvm-objdump \
-          STRIP=$CLANG_BIN/llvm-strip \
-          CROSS_COMPILE=$GCC64_BIN/aarch64-linux-android- \
-          CROSS_COMPILE_ARM32=$GCC32_BIN/arm-linux-androideabi- \
-          CLANG_TRIPLE=aarch64-linux-gnu- \
-          LLVM=1 \
-          LLVM_IAS=1
+          CC=clang \
+          LD=ld.bfd \
+          AR=llvm-ar \
+          NM=llvm-nm \
+          OBJCOPY=llvm-objcopy \
+          OBJDUMP=llvm-objdump \
+          STRIP=llvm-strip \
+          CROSS_COMPILE=$(pwd)/toolchain/gcc64/bin/aarch64-linux-android- \
+          CROSS_COMPILE_ARM32=$(pwd)/toolchain/gcc32/bin/arm-linux-androideabi- \
+          LLVM=0 \
+          LLVM_IAS=0 \
+          KCFLAGS=-Wno-error
 
-    - name: ✅ Verify Image
-      run: |
-        if [ -f $OUTDIR/arch/arm64/boot/Image.gz-dtb ]; then
-            echo "IMAGE_TYPE=Image.gz-dtb" >> $GITHUB_ENV
-        else
-            echo "IMAGE_TYPE=Image.gz" >> $GITHUB_ENV
-        fi
-
-    - name: 📦 AnyKernel3 ZIP
+    - name: 📦 Package AnyKernel3
       run: |
         git clone https://github.com/osm0sis/AnyKernel3 --depth=1
-        cp $OUTDIR/arch/arm64/boot/${{ env.IMAGE_TYPE }} AnyKernel3/
-        [ -f $OUTDIR/arch/arm64/boot/dtbo.img ] && cp $OUTDIR/arch/arm64/boot/dtbo.img AnyKernel3/
+        cp $OUTDIR/arch/arm64/boot/Image.gz-dtb AnyKernel3/ || \
+        cp $OUTDIR/arch/arm64/boot/Image.gz AnyKernel3/
         cd AnyKernel3
-        sed -i 's/device.name1=maguro/device.name1=r8q/g' anykernel.sh
+        sed -i 's/device.name1=.*/device.name1=r8q/' anykernel.sh
         zip -r9 ../BlazeX-S20FE-Kernel.zip *
 
-    - name: ⬆️ Upload artifacts
+    - name: ⬆️ Upload
       uses: actions/upload-artifact@v4
       with:
         name: BlazeX-Kernel-S20FE
