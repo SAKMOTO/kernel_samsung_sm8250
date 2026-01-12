@@ -1,11 +1,11 @@
 ### AnyKernel3 Ramdisk Mod Script
-## Enhanced Interactive Kernel Installer
+## HINA Kernel - Enhanced Interactive Kernel Installer
 ## Modified for SM8250 with Root Solution Support
 
 ### AnyKernel setup
 # global properties
 properties() { '
-kernel.string=SM8250 Enhanced Kernel with Performance Features
+kernel.string=HINA Kernel v1.0 - SM8250 Enhanced
 do.devicecheck=1
 do.modules=0
 do.systemless=1
@@ -45,8 +45,8 @@ PATCH_VBMETA_FLAG=auto;
 ui_print " ";
 ui_print "╔════════════════════════════════════════════════════════════╗";
 ui_print "║                                                            ║";
-ui_print "║       SM8250 Enhanced Kernel Installer                    ║";
-ui_print "║       Performance Optimized for Android 11-13             ║";
+ui_print "║              ✨ HINA KERNEL v1.0 ✨                       ║";
+ui_print "║        SM8250 Enhanced Performance Kernel                  ║";
 ui_print "║                                                            ║";
 ui_print "╚════════════════════════════════════════════════════════════╝";
 ui_print " ";
@@ -154,9 +154,14 @@ ui_print " ";
 ui_print "╔════════════════════════════════════════════════════════════╗";
 ui_print "║  Installation Complete!                                    ║";
 ui_print "║                                                            ║";
+ui_print "║  ✨ HINA KERNEL v1.0 Successfully Installed ✨            ║";
+ui_print "║                                                            ║";
 ui_print "║  Root Type: $ROOT_TYPE                                     ║";
+ui_print "║  Features: All Enabled & Optimized                        ║";
 ui_print "║                                                            ║";
 ui_print "║  Please reboot your device now.                           ║";
+ui_print "║  Enjoy extreme performance!                               ║";
+ui_print "║                                                            ║";
 ui_print "╚════════════════════════════════════════════════════════════╝";
 ui_print " ";
 
