@@ -16,7 +16,7 @@ device.name2=SM-G981B
 device.name3=SM-G981N
 device.name4=SM-G981U
 device.name5=SM-G981W
-supported.versions=11-13
+supported.versions=11-17
 supported.patchlevels=
 supported.vendorpatchlevels=
 '; } # end properties
