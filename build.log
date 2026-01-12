@@ -1,0 +1,54 @@
+No submodules found in this repository.
+==============================================
+Which project do you want to build?
+==============================================
+bloomxq
+c1q
+c2q
+f2q
+gts7l
+gts7lwifi
+gts7xl
+gts7xlwifi
+r8q
+x1q
+y2q
+z3q
+==============================================
+==============================================
+Would you like to force Selinux to permissive?
+==============================================
+yes
+no (default)
+==============================================
+==============================================
+Configuration Summary:
+Model: r8q
+Region: default
+==============================================
+
+==============================================
+Starting: FUNC_BUILD_KERNEL
+==============================================
+Build Info
+==============================================
+Project: r8q
+Common config: vendor/kona-perf_defconfig
+Project config: vendor/samsung/r8q.config
+Extra included configs:  
+Output directory: out
+==============================================
+
+make: Entering directory '/workspaces/kernel_samsung_sm8250'
+make[1]: Entering directory '/workspaces/kernel_samsung_sm8250/out/obj/KERNEL_OBJ'
+  GEN     ./Makefile
+  LEX     scripts/kconfig/zconf.lex.c
+  HOSTCC  scripts/kconfig/zconf.tab.o
+  HOSTLD  scripts/kconfig/conf
+scripts/Kconfig.include:39: linker 'ld.lld' not found
+make[3]: *** [/workspaces/kernel_samsung_sm8250/scripts/kconfig/Makefile:104: vendor/kona-perf_defconfig] Error 1
+make[2]: *** [/workspaces/kernel_samsung_sm8250/Makefile:580: vendor/kona-perf_defconfig] Error 2
+make[1]: *** [/workspaces/kernel_samsung_sm8250/Makefile:293: __build_one_by_one] Error 2
+make[1]: Leaving directory '/workspaces/kernel_samsung_sm8250/out/obj/KERNEL_OBJ'
+make: *** [Makefile:153: sub-make] Error 2
+make: Leaving directory '/workspaces/kernel_samsung_sm8250'
