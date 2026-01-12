@@ -149,16 +149,11 @@ if [ "$PERMISSIVE" = true ]; then
 fi
 
 # Set toolchain and build environment
-if [ ! -d "/home/atakan/geliştirme/tools/toolchains/neutron-clang/bin" ]; then
-    echo "Error: AOSP toolchain directories not found. Exiting."
-    exit 1
-fi
-
-PATH="/home/atakan/geliştirme/tools/toolchains/neutron-clang/bin:${PATH}"
-KERNEL_LLVM_BIN="/home/atakan/geliştirme/tools/toolchains/neutron-clang/bin/clang"
+# Use system clang instead of custom toolchain
+KERNEL_LLVM_BIN=$(which clang)
 
 # Set kernel build environment variables
-export CC="ccache clang"
+export CC="clang"
 export LLVM=1
 export LLVM_IAS=1
 export DTC_OVERLAY_TEST_EXT="$KERNEL_DIR/tools/ufdt_apply_overlay"
