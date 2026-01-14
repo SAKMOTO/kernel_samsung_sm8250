@@ -5,7 +5,7 @@
 ### AnyKernel setup
 # global properties
 properties() { '
-kernel.string=HINA Kernel v1.0 - SM8250 Enhanced
+kernel.string=HINA Kernel v2.0 - SM8250 Enhanced (GPU 926 MHz OC + UFS Turbo + BFQ)
 do.devicecheck=1
 do.modules=0
 do.systemless=1
@@ -45,8 +45,8 @@ PATCH_VBMETA_FLAG=auto;
 ui_print " ";
 ui_print "╔════════════════════════════════════════════════════════════╗";
 ui_print "║                                                            ║";
-ui_print "║              ✨ HINA KERNEL v1.0 ✨                       ║";
-ui_print "║        SM8250 Enhanced Performance Kernel                  ║";
+ui_print "║              ✨ HINA KERNEL v2.0 ✨                       ║";
+ui_print "║    SM8250 Enhanced: GPU 926MHz + UFS Turbo + BFQ I/O     ║";
 ui_print "║                                                            ║";
 ui_print "╚════════════════════════════════════════════════════════════╝";
 ui_print " ";
@@ -141,6 +141,25 @@ ui_print " ";
 # boot install
 dump_boot; # grab current boot, ramdisk kept intact
 
+# ============================================================================
+# Inject Performance Optimization Script into Boot Ramdisk
+# ============================================================================
+ui_print "Injecting performance initialization scripts...";
+
+# Copy performance tuning script to ramdisk init.d
+if [ -d "$RAMDISK/init.d" ]; then
+  cp -f tools/init_performance.sh "$RAMDISK/init.d/99-hina-performance.sh" 2>/dev/null;
+  chmod 755 "$RAMDISK/init.d/99-hina-performance.sh" 2>/dev/null;
+  ui_print "✓ Performance script injected (init.d)";
+elif [ -f "$RAMDISK/init.rc" ]; then
+  # Fallback: append to init.rc if init.d doesn't exist
+  echo "" >> "$RAMDISK/init.rc";
+  echo "# HINA Kernel Performance Tuning" >> "$RAMDISK/init.rc";
+  echo "on property:sys.boot_completed=1" >> "$RAMDISK/init.rc";
+  echo "    exec_background /system/bin/sh tools/init_performance.sh" >> "$RAMDISK/init.rc";
+  ui_print "✓ Performance tuning appended to init.rc";
+fi
+
 # Apply root-specific modifications if needed
 if [ "$ROOT_TYPE" = "kernelsu" ] || [ "$ROOT_TYPE" = "wildkernelsu" ] || [ "$ROOT_TYPE" = "ksunext" ]; then
   ui_print "Applying root solution patches...";
@@ -154,7 +173,13 @@ ui_print " ";
 ui_print "╔════════════════════════════════════════════════════════════╗";
 ui_print "║  Installation Complete!                                    ║";
 ui_print "║                                                            ║";
-ui_print "║  ✨ HINA KERNEL v1.0 Successfully Installed ✨            ║";
+ui_print "║  ✨ HINA KERNEL v2.0 Successfully Installed ✨            ║";
+ui_print "║                                                            ║";
+ui_print "║  Performance Features:                                     ║";
+ui_print "║    • GPU Overclock: 411-926 MHz with smart power levels   ║";
+ui_print "║    • UFS Turbo: Core clocks at 403.2 MHz                  ║";
+ui_print "║    • BFQ I/O Scheduler: Low-latency app launches          ║";
+ui_print "║    • CPU Tuning: schedutil + uclamp optimization          ║";
 ui_print "║                                                            ║";
 ui_print "║  Root Type: $ROOT_TYPE                                     ║";
 ui_print "║  Features: All Enabled & Optimized                        ║";
