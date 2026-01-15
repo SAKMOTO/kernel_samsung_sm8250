@@ -340,7 +340,11 @@ extern void sec_debug_prepare_for_wdog_bark_reset(void);
 
 /* implemented @ drivers/soc/qcom/watchdog_v2.c */
 /* called @ kernel/panic.c */
+#if IS_ENABLED(CONFIG_QCOM_WATCHDOG_V2)
 extern void emerg_pet_watchdog(void);
+#else
+static inline void emerg_pet_watchdog(void) {}
+#endif
 
 /* called @ init/main.c */
 extern char *sec_debug_get_erased_command_line(void);
