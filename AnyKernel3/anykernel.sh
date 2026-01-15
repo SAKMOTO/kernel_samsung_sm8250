@@ -1,254 +1,87 @@
-### AnyKernel3 Ramdisk Mod Script
-## HINA Kernel - Enhanced Interactive Kernel Installer
-## Modified for SM8250 with Root Solution Support
+# AnyKernel3 Ramdisk Mod Script
+# osm0sis @ xda-developers
 
-### AnyKernel setup
-# global properties
+## AnyKernel setup
+# begin properties
 properties() { '
-kernel.string=HINA Kernel v2.0 - SM8250 Enhanced (GPU 926 MHz OC + UFS Turbo + BFQ)
+kernel.string=not-revived by @kernel2
 do.devicecheck=1
 do.modules=0
 do.systemless=1
 do.cleanup=1
-do.cleanuponabort=1
+do.cleanuponabort=0
 device.name1=r8q
-device.name2=SM-G981B
-device.name3=SM-G981N
-device.name4=SM-G981U
-device.name5=SM-G981W
-supported.versions=11-17
+device.name2=r8qxx
+device.name3=r8qxxx
+device.name4=OP5DO6L1
+supported.versions=14 - 18
 supported.patchlevels=
-supported.vendorpatchlevels=
 '; } # end properties
 
+# shell variables
+block=/dev/block/platform/soc/1d84000.ufshc/by-name/boot;
+is_slot_device=0;
+ramdisk_compression=auto;
 
-### AnyKernel install
-## boot files attributes
-boot_attributes() {
-set_perm_recursive 0 0 755 644 $RAMDISK/*;
-set_perm_recursive 0 0 750 750 $RAMDISK/init* $RAMDISK/sbin;
-} # end attributes
-
-# boot shell variables
-BLOCK=auto;
-IS_SLOT_DEVICE=0;
-RAMDISK_COMPRESSION=auto;
-PATCH_VBMETA_FLAG=auto;
-
-# import functions/variables and setup patching - see for reference (DO NOT REMOVE)
+## AnyKernel methods (DO NOT CHANGE)
+# import patching functions/variables - see for reference
 . tools/ak3-core.sh;
 
-# ============================================================================
-# Interactive Root Solution Selection
-# ============================================================================
+## AnyKernel file attributes
+# set permissions/ownership for included ramdisk files
+set_perm_recursive 0 0 755 644 $ramdisk/*;
+set_perm_recursive 0 0 750 750 $ramdisk/init* $ramdisk/sbin;
 
-ui_print " ";
-ui_print "╔════════════════════════════════════════════════════════════╗";
-ui_print "║                                                            ║";
-ui_print "║              ✨ HINA KERNEL v2.0 ✨                       ║";
-ui_print "║    SM8250 Enhanced: GPU 926MHz + UFS Turbo + BFQ I/O     ║";
-ui_print "║                                                            ║";
-ui_print "╚════════════════════════════════════════════════════════════╝";
-ui_print " ";
+## AnyKernel boot install
+dump_boot;
 
-ui_print "┌────────────────────────────────────────────────────────────┐";
-ui_print "│ Select Root Solution:                                      │";
-ui_print "├────────────────────────────────────────────────────────────┤";
-ui_print "│                                                            │";
-ui_print "│  1. KernelSU (RKernelSU) - Recommended                    │";
-ui_print "│     • Module support, SafetyNet bypass capable            │";
-ui_print "│                                                            │";
-ui_print "│  2. WildKernelSU - Experimental                           │";
-ui_print "│     • Enhanced security features                          │";
-ui_print "│                                                            │";
-ui_print "│  3. KSU Next Gen - Latest development                     │";
-ui_print "│     • Cutting edge features                               │";
-ui_print "│                                                            │";
-ui_print "│  4. Magisk Compatible - Traditional root                  │";
-ui_print "│     • Use with Magisk Manager app                         │";
-ui_print "│                                                            │";
-ui_print "│  5. No Root - Stock kernel only                           │";
-ui_print "│     • Performance features without root                   │";
-ui_print "│                                                            │";
-ui_print "└────────────────────────────────────────────────────────────┘";
-ui_print " ";
-
-# Detect if user has a preference file (created by installer UI)
-if [ -f /tmp/aroma/root_choice.txt ]; then
-  ROOT_CHOICE=$(cat /tmp/aroma/root_choice.txt);
-elif [ -f /tmp/anykernel/root_choice.prop ]; then
-  ROOT_CHOICE=$(cat /tmp/anykernel/root_choice.prop);
+# begin kernel/dtb/dtbo changes
+oneui=$(file_getprop /system/build.prop ro.build.version.oneui);
+gsi=$(file_getprop /system/build.prop ro.product.system.device);
+cos=$(file_getprop /system/build.prop ro.product.system.brand);
+if [ -n "$oneui" ]; then
+   ui_print " "
+   ui_print " • OneUI ROM detected! • " # OneUI 7.X+ bomb
+   ui_print " "
+   ui_print " • Patching Fingerprint Sensor... • "
+   patch_cmdline "android.is_aosp" "android.is_aosp=0";
+elif [ $gsi == generic ]; then
+   ui_print " "
+   ui_print " • GSI ROM detected! • " # i hope the gsi doesnt boot :)
+   ui_print " "
+   ui_print " • Patching Fingerprint Sensor... • "
+   patch_cmdline "android.is_aosp" "android.is_aosp=0";
+   ui_print " "
+   ui_print " • Patching SELinux... • "
+   patch_cmdline "androidboot.selinux" "androidboot.selinux=permissive";
+elif [ $cos == oplus ]; then
+   ui_print " "
+   ui_print " • Oplus ROM detected! • " # Damn
+   ui_print " "
+   ui_print " • Patching Fingerprint Sensor... • "
+   patch_cmdline "android.is_aosp" "android.is_aosp=0";
+   ui_print " "
+   ui_print " • Patching SELinux... • "
+   patch_cmdline "androidboot.selinux" "androidboot.selinux=permissive";
+   ui_print " "
+   ui_print " • Spoofing verified boot state to green... • "
+   patch_cmdline "ro.boot.verifiedbootstate" "ro.boot.verifiedbootstate=green";
 else
-  # Default to KernelSU if no choice detected
-  ROOT_CHOICE=1;
-  ui_print "⚠ No selection detected, defaulting to KernelSU (Option 1)";
-  ui_print " ";
+   ui_print " "
+   ui_print " • AOSP ROM detected! • " # Android 16/15 veri gud
+   ui_print " "
+   ui_print " • Patching Fingerprint Sensor... • "
+   patch_cmdline "android.is_aosp" "android.is_aosp=1";
+   ui_print " "
+   ui_print " • Spoofing verified boot state to green... • "
+   patch_cmdline "ro.boot.verifiedbootstate" "ro.boot.verifiedbootstate=green";
 fi
+ui_print " "
+ui_print " • Patching vbmeta unconditionally... • "
+dd if=$home/vbmeta.img of=/dev/block/platform/soc/1d84000.ufshc/by-name/vbmeta
 
-ui_print "Selected option: $ROOT_CHOICE";
-ui_print " ";
+ui_print " "
+ui_print " • Patching dtbo unconditionally... • "
 
-# Apply root solution based on choice
-case $ROOT_CHOICE in
-  1)
-    ui_print "✓ Installing with KernelSU (RKernelSU) support...";
-    ROOT_TYPE="kernelsu";
-    # KernelSU patches would go here
-    # patch_cmdline "androidboot.selinux" "androidboot.selinux=permissive";
-    ;;
-  2)
-    ui_print "✓ Installing with WildKernelSU support...";
-    ROOT_TYPE="wildkernelsu";
-    # WildKSU patches would go here
-    ;;
-  3)
-    ui_print "✓ Installing with KSU Next Gen support...";
-    ROOT_TYPE="ksunext";
-    # KSU Next patches would go here
-    ;;
-  4)
-    ui_print "✓ Installing Magisk-compatible kernel...";
-    ROOT_TYPE="magisk";
-    # Magisk compatibility patches
-    ;;
-  5)
-    ui_print "✓ Installing stock kernel (no root)...";
-    ROOT_TYPE="noroot";
-    # No root modifications
-    ;;
-  *)
-    ui_print "⚠ Invalid choice, defaulting to no root...";
-    ROOT_TYPE="noroot";
-    ;;
-esac
-
-ui_print " ";
-ui_print "┌────────────────────────────────────────────────────────────┐";
-ui_print "│ Kernel Features:                                           │";
-ui_print "├────────────────────────────────────────────────────────────┤";
-ui_print "│ ✓ CPU Governors: schedutil, performance, powersave         │";
-ui_print "│ ✓ I/O Schedulers: BFQ, Kyber, Deadline                     │";
-ui_print "│ ✓ TCP Congestion: BBR, Cubic, Westwood                     │";
-ui_print "│ ✓ WireGuard VPN built-in                                   │";
-ui_print "│ ✓ ExFAT & NTFS filesystem support                          │";
-ui_print "│ ✓ F2FS optimizations enabled                               │";
-ui_print "│ ✓ zRAM with LZ4 compression                                │";
-ui_print "│ ✓ KSM (Kernel Same-page Merging)                           │";
-ui_print "│ ✓ Power efficient workqueues                               │";
-ui_print "└────────────────────────────────────────────────────────────┘";
-ui_print " ";
-
-# boot install
-dump_boot; # grab current boot, ramdisk kept intact
-
-# ============================================================================
-# Inject Performance Optimization Script into Boot Ramdisk
-# ============================================================================
-ui_print "Injecting performance initialization scripts...";
-
-# Copy performance tuning script to ramdisk init.d
-if [ -d "$RAMDISK/init.d" ]; then
-  cp -f tools/init_performance.sh "$RAMDISK/init.d/99-hina-performance.sh" 2>/dev/null;
-  chmod 755 "$RAMDISK/init.d/99-hina-performance.sh" 2>/dev/null;
-  ui_print "✓ Performance script injected (init.d)";
-elif [ -f "$RAMDISK/init.rc" ]; then
-  # Fallback: append to init.rc if init.d doesn't exist
-  echo "" >> "$RAMDISK/init.rc";
-  echo "# HINA Kernel Performance Tuning" >> "$RAMDISK/init.rc";
-  echo "on property:sys.boot_completed=1" >> "$RAMDISK/init.rc";
-  echo "    exec_background /system/bin/sh tools/init_performance.sh" >> "$RAMDISK/init.rc";
-  ui_print "✓ Performance tuning appended to init.rc";
-fi
-
-# Apply root-specific modifications if needed
-if [ "$ROOT_TYPE" = "kernelsu" ] || [ "$ROOT_TYPE" = "wildkernelsu" ] || [ "$ROOT_TYPE" = "ksunext" ]; then
-  ui_print "Applying root solution patches...";
-  # Add KernelSU manager detection
-  # This would check for KernelSU manager app and setup accordingly
-fi
-
-write_boot; # repack with new kernel/dtb assets provided in this zip
-
-ui_print " ";
-ui_print "╔════════════════════════════════════════════════════════════╗";
-ui_print "║  Installation Complete!                                    ║";
-ui_print "║                                                            ║";
-ui_print "║  ✨ HINA KERNEL v2.0 Successfully Installed ✨            ║";
-ui_print "║                                                            ║";
-ui_print "║  Performance Features:                                     ║";
-ui_print "║    • GPU Overclock: 411-926 MHz with smart power levels   ║";
-ui_print "║    • UFS Turbo: Core clocks at 403.2 MHz                  ║";
-ui_print "║    • BFQ I/O Scheduler: Low-latency app launches          ║";
-ui_print "║    • CPU Tuning: schedutil + uclamp optimization          ║";
-ui_print "║                                                            ║";
-ui_print "║  Root Type: $ROOT_TYPE                                     ║";
-ui_print "║  Features: All Enabled & Optimized                        ║";
-ui_print "║                                                            ║";
-ui_print "║  Please reboot your device now.                           ║";
-ui_print "║  Enjoy extreme performance!                               ║";
-ui_print "║                                                            ║";
-ui_print "╚════════════════════════════════════════════════════════════╝";
-ui_print " ";
-
+write_boot;
 ## end boot install
-
-
-## init_boot files attributes
-#init_boot_attributes() {
-#set_perm_recursive 0 0 755 644 $RAMDISK/*;
-#set_perm_recursive 0 0 750 750 $RAMDISK/init* $RAMDISK/sbin;
-#} # end attributes
-
-# init_boot shell variables
-#BLOCK=init_boot;
-#IS_SLOT_DEVICE=1;
-#RAMDISK_COMPRESSION=auto;
-#PATCH_VBMETA_FLAG=auto;
-
-# reset for init_boot patching
-#reset_ak;
-
-# init_boot install
-#dump_boot; # unpack ramdisk since it is the new first stage init ramdisk where overlay.d must go
-
-#write_boot;
-## end init_boot install
-
-
-## vendor_kernel_boot shell variables
-#BLOCK=vendor_kernel_boot;
-#IS_SLOT_DEVICE=1;
-#RAMDISK_COMPRESSION=auto;
-#PATCH_VBMETA_FLAG=auto;
-
-# reset for vendor_kernel_boot patching
-#reset_ak;
-
-# vendor_kernel_boot install
-#split_boot; # skip unpack/repack ramdisk, e.g. for dtb on devices with hdr v4 and vendor_kernel_boot
-
-#flash_boot;
-## end vendor_kernel_boot install
-
-
-## vendor_boot files attributes
-#vendor_boot_attributes() {
-#set_perm_recursive 0 0 755 644 $RAMDISK/*;
-#set_perm_recursive 0 0 750 750 $RAMDISK/init* $RAMDISK/sbin;
-#} # end attributes
-
-# vendor_boot shell variables
-#BLOCK=vendor_boot;
-#IS_SLOT_DEVICE=1;
-#RAMDISK_COMPRESSION=auto;
-#PATCH_VBMETA_FLAG=auto;
-
-# reset for vendor_boot patching
-#reset_ak;
-
-# vendor_boot install
-#dump_boot; # use split_boot to skip ramdisk unpack, e.g. for dtb on devices with hdr v4 but no vendor_kernel_boot
-
-#write_boot; # use flash_boot to skip ramdisk repack, e.g. for dtb on devices with hdr v4 but no vendor_kernel_boot
-## end vendor_boot install
-
