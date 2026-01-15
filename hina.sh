@@ -2,7 +2,7 @@
 
 # --- Configuration ---
 KERNEL_ROOT=$(pwd)
-KERNEL_NAME="backshot"
+KERNEL_NAME="Max"
 DATE=$(date +"%Y%m%d")
 LOG_FILE="$KERNEL_ROOT/build.log"
 LAST_SHA_FILE="$KERNEL_ROOT/.acacia_last_sha"
@@ -231,7 +231,7 @@ if [ "$SELINUX_MODE" = "permissive" ]; then
     ZIP_SUFFIX="${ZIP_SUFFIX}-permissive"
 fi
 
-ZIP_NAME="Acacia-${KERNEL_NAME}-${SHORT_SHA}-${DATE}${ZIP_SUFFIX}.zip"
+ZIP_NAME="HINA-${KERNEL_NAME}-${SHORT_SHA}-${DATE}${ZIP_SUFFIX}.zip"
 
 # Zip it
 cd "$ANYKERNEL_DIR" || exit 1
