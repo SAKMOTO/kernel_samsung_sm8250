@@ -1157,6 +1157,11 @@ static inline void bpf_jit_free(struct bpf_prog *fp)
 	bpf_prog_unlock_free(fp);
 }
 
+static inline bool bpf_jit_blinding_enabled(struct bpf_prog *prog)
+{
+	return false;
+}
+
 static inline bool bpf_jit_kallsyms_enabled(void)
 {
 	return false;
