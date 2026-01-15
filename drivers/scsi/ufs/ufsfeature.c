@@ -234,9 +234,10 @@ out_free_mem:
 	return;
 dt_hpb_disable:
 #if defined(CONFIG_UFSHPB)
-        /* don't call init handler */
-        ufsf->ufshpb_state = HPB_FAILED;
+	/* don't call init handler */
+	ufsf->ufshpb_state = HPB_FAILED;
 #endif
+	;
 }
 
 static void ufsf_print_query_buf(unsigned char *field, int size)

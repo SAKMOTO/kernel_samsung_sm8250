@@ -1180,7 +1180,7 @@ static inline void ufshcd_remove_non_printable(char *val)
 		*val = ' ';
 }
 
-static void ufshcd_add_cmd_upiu_trace(struct ufs_hba *hba, unsigned int tag,
+static void __maybe_unused ufshcd_add_cmd_upiu_trace(struct ufs_hba *hba, unsigned int tag,
 		const char *str)
 {
 	struct utp_upiu_req *rq = hba->lrb[tag].ucd_req_ptr;
@@ -1316,7 +1316,7 @@ static void ufshcd_cmd_log_init(struct ufs_hba *hba)
 {
 }
 
-static void __ufshcd_cmd_log(struct ufs_hba *hba, char *str, char *cmd_type,
+static void __maybe_unused __ufshcd_cmd_log(struct ufs_hba *hba, char *str, char *cmd_type,
 			     unsigned int tag, u8 cmd_id, u8 idn, u8 lun,
 			     sector_t lba, int transfer_len)
 {
