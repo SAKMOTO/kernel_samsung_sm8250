@@ -35,6 +35,7 @@
  * license terms, and distributes only under these terms.
  */
 
+#include <linux/of.h>
 #include "ufsfeature.h"
 #include "ufshcd.h"
 
@@ -136,6 +137,7 @@ out:
 
 int ufsf_hpb_dt_check(struct ufs_hba *hba)
 {
+#if defined(CONFIG_UFSHPB)
         struct device_node *node = hba->dev->of_node;
         struct ufsf_feature *ufsf = &hba->ufsf;
         int dt_hpb_enable = 1;
@@ -186,6 +188,9 @@ int ufsf_hpb_dt_check(struct ufs_hba *hba)
 query_fail:
         pm_runtime_put_sync(hba->dev);
         return 0;
+#else
+        return 0;
+#endif
 }
 
 void ufsf_device_check(struct ufs_hba *hba)
