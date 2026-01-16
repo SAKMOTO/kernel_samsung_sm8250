@@ -815,7 +815,7 @@ EXPORT_SYMBOL(dd_submit_bio);
 
 #define DD_PAGE_CRYPTO_REQ_TIMEOUT 10000
 static int __wait_user_request(struct dd_req *req) {
-	int intr;
+	long intr;
 
 	dd_debug_req("wait for user response", DD_DEBUG_PROCESS, req);
 	while (req->state != DD_REQ_SUBMITTED) {
@@ -825,7 +825,7 @@ static int __wait_user_request(struct dd_req *req) {
 		dd_verbose("wake up unique:%d\n", req->unique);
 
 		if (intr == 0 || intr == -ERESTARTSYS) {
-			dd_error("timeout or interrupted (%d) [ID:%d] ino:%ld\n",
+			dd_error("timeout or interrupted (%ld) [ID:%d] ino:%ld\n",
 					intr, req->unique, req->ino);
 
 			abort_req(__func__, req, -EIO);
