@@ -62,7 +62,7 @@
 #if defined(CONFIG_LEDS_RT8547)
 #include <linux/leds-rt8547.h>
 #endif
-#if defined(CONFIG_LEDS_KTD2692) 
+#if defined(CONFIG_LEDS_KTD2692) || defined(CONFIG_LEDS_RT8547)
 #include <linux/leds-ktd2692.h>
 #endif
 #include <linux/pwm.h>
