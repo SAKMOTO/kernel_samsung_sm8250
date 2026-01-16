@@ -16,18 +16,18 @@
 #if defined(CONFIG_LEDS_RT8547)
 #include <linux/leds-rt8547.h>
 #endif
-#if defined(CONFIG_LEDS_KTD2692) 
+#if defined(CONFIG_LEDS_KTD2692) || defined(CONFIG_LEDS_RT8547)
 #include <linux/leds-ktd2692.h>
 #endif
 
-#if defined(CONFIG_LEDS_KTD2692)
+#if defined(CONFIG_LEDS_KTD2692) || defined(CONFIG_LEDS_RT8547)
 extern bool sysfs_flash_op_kt;
 #endif
 #if defined(CONFIG_LEDS_RT8547) || defined(CONFIG_LEDS_S2MPB02)
 extern bool sysfs_flash_op;
 #endif
 
-#if defined(CONFIG_LEDS_KTD2692)
+#if defined(CONFIG_LEDS_KTD2692) || defined(CONFIG_LEDS_RT8547)
 static unsigned int system_rev __read_mostly;
 
 static int __init sec_hw_rev_setup(char *p)
